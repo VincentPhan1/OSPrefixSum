@@ -1,16 +1,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-
+#include <math.h>
+#include <unistd.h>
 
 void Usage(char*);
-int* readFile(FILE *fp);
+void readFile(FILE *fp, int *array);
+
+void prefixSum(int *array);
+void claculatePrefixSum(int *input, int *output, int step, int startIndex, int endIndex);
 
 
 uint16_t numElements;
 uint16_t numCores;
-int* ints;
-
 
 int main(int argc, char** argv) {
     if(argc != 5) {
@@ -34,38 +36,43 @@ int main(int argc, char** argv) {
         exit(EXIT_FAILURE);
     }
 
-    ints = readFile(inputp);
-    if(ints == NULL){
-        fclose(inputp);
-        fclose(outputp);
-        free(ints);
-        exit(EXIT_FAILURE);
-    }
-
-    for (int i = 0; i < numElements; i++) {
-        printf("%d ", ints[i]);
-    }
 
     fclose(inputp);
     fclose(outputp);
-    free(ints);
+
     return EXIT_SUCCESS;
 }
 
-int* readFile(FILE *fp) {
-    int* integers = (int*)malloc(numElements * sizeof(int)); // Allocate memory for the integers array
-    if (integers == NULL) {
-        perror("Error allocating memory");
-        return NULL;
-    }
-
+void readFile(FILE *fp, int *array) {
     int numRead = 0;
-    while (fscanf(fp, "%d", &integers[numRead]) == 1) {
+    while (numRead < numElements && fscanf(fp, "%d", &array[numRead]) == 1) {
         numRead++;
     }
-
-    return integers;
 }
+
+void calculatePrefixSum(int *input, int *output, int step, int startIndex, int endIndex) {
+    for (int j = startIndex; j < endIndex; j++) {
+        output[j] = input[j] + ((j >= step) ? output[j - step] : 0);
+    }
+}
+
+void prefixSum(int *array) {
+    int numSteps = (int)log2(numElements);
+
+    for(int i = 0; i < numCores; i++) {
+        pid_t pid;
+        pid = fork();
+
+        switch(pid) {
+            case -1:
+                perror("fork");
+                exit(EXIT_FAILURE);
+            case 0:
+
+        }
+    }
+}
+
 
 
 
