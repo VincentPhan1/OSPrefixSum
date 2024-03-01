@@ -5,7 +5,8 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <string.h>
-#include <stdbool.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 void Usage(char*);
 void readFile(FILE *fp, int *array);
@@ -32,7 +33,13 @@ int main(int argc, char** argv) {
     numCores = atoi(argv[2]);
 
     if (numElements <= 0 || numCores <= 0) {
-        perror("Number of elements or cores less than 0.");
+        fprintf(stderr, "Number of elements or cores less than 0.");
+        exit(EXIT_FAILURE);
+    }
+
+    if (numCores > numElements) {
+        fprintf(stderr, "Error: Number of cores defined (%d) greater than number of elements (%d)\n", numCores, numElements);
+        exit(EXIT_FAILURE);
     }
 
     inputp = fopen(argv[3], "r");
@@ -49,8 +56,9 @@ int main(int argc, char** argv) {
     prefixSum(array);
 
     for(int i = 0; i < numElements; i++) {
-        printf("%d", array[i]);
+        fprintf(outputp, "%d ", array[i]);
     }
+
     munmap(array, numElements * sizeof(int));
     fclose(outputp);
 
@@ -62,6 +70,17 @@ void readFile(FILE *fp, int *array) {
     while (numRead < numElements && fscanf(fp, "%d", &array[numRead]) == 1) {
         numRead++;
     }
+
+    if (numRead != numElements) {
+        fprintf(stderr, "Error: Number of elements defined (%d) not equal to number of elements found (%d)\n", numElements, numRead);
+        numElements = numRead;
+        if (numCores > numElements) {
+            fprintf(stderr, "Error: Number of cores defined (%d) greater than number of elements (%d)\n", numCores, numElements);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+
 }
 
 void calculatePrefixSum(int *input, int *output, int step, int startIndex, int endIndex) {
@@ -73,6 +92,7 @@ void calculatePrefixSum(int *input, int *output, int step, int startIndex, int e
 void prefixSum(int *array) {
     int numSteps = (int)log2(numElements);
     int chunkSize = numElements/numCores;
+    pid_t pid_array[numCores];
 
     int* prefixSums = mmap(NULL, numElements * sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     int *flags = mmap(NULL, numCores * sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
@@ -81,8 +101,8 @@ void prefixSum(int *array) {
 
 
     for(int i = 0; i < numCores; i++) {
-        pid_t pid;
-        pid = fork();
+        pid_t pid = fork();
+        pid_array[i] = pid;
         if (pid == -1) {
             perror("fork");
             exit(EXIT_FAILURE);
@@ -92,9 +112,9 @@ void prefixSum(int *array) {
             exit(EXIT_SUCCESS);
         }
     }
-
-    for (int i = 0; i < numCores; i++) {
-        while (flags[i] < numSteps) {} // Wait for other children to complete current step.
+    int status;
+    for(int i = 0; i < numCores; i++) {
+        waitpid(pid_array[i], &status, 0);
     }
 
     munmap(prefixSums, numElements * sizeof(int));
@@ -128,6 +148,6 @@ void childSum(int *array, int startIndex, int chunkSize, int *prefixSums, int *f
 }
 
 void Usage(char* s) {
-    fprintf(stderr, "Usage: %s num_elements num_cores input_file output_file");
+    fprintf(stderr, "Usage: %s num_elements num_cores input_file output_file", s);
     exit(EXIT_FAILURE);
 }
